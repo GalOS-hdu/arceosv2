@@ -60,6 +60,7 @@ axconfig.workspace = true
 axcpu = "0.3.0-preview.4"
 axplat.workspace = true
 cfg-if.workspace = true
+fdt-parser = "0.4"
 heapless = "0.9"
 kernel_guard.workspace = true
 lazyinit.workspace = true
@@ -68,7 +69,7 @@ log.workspace = true
 memory_addr.workspace = true
 page_table_multiarch = { workspace = true, optional = true }
 percpu.workspace = true
-fdt-parser = "0.4"
+spin.workspace = true
 
 [target.'cfg(target_arch = "x86_64")'.dependencies]
 axplat-x86-pc = { workspace = true, optional = true }

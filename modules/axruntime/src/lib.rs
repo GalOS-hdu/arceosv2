@@ -86,10 +86,11 @@ impl axlog::LogIf for LogIfImpl {
 
 use core::sync::atomic::{AtomicUsize, Ordering};
 
+/// Number of CPUs that have completed initialization.
 static INITED_CPUS: AtomicUsize = AtomicUsize::new(0);
 
 fn is_init_ok() -> bool {
-    INITED_CPUS.load(Ordering::Acquire) == axconfig::plat::CPU_NUM
+    INITED_CPUS.load(Ordering::Acquire) == axhal::cpu_num()
 }
 
 /// The main entry point of the ArceOS runtime.
@@ -125,7 +126,7 @@ pub fn rust_main(cpu_id: usize, arg: usize) -> ! {
         option_env!("AX_MODE").unwrap_or(""),
         option_env!("AX_LOG").unwrap_or(""),
         axbacktrace::is_enabled(),
-        axconfig::plat::CPU_NUM,
+        axhal::cpu_num()
     );
     #[cfg(feature = "rtc")]
     ax_println!(

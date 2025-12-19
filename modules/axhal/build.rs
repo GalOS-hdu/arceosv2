@@ -1,5 +1,4 @@
-use std::io::Result;
-use std::path::Path;
+use std::{io::Result, path::Path};
 
 fn main() {
     let arch = std::env::var("CARGO_CFG_TARGET_ARCH").unwrap();
@@ -24,7 +23,7 @@ fn gen_linker_script(arch: &str, platform: &str) -> Result<()> {
         "%KERNEL_BASE%",
         &format!("{:#x}", axconfig::plat::KERNEL_BASE_VADDR),
     );
-    let ld_content = ld_content.replace("%CPU_NUM%", &format!("{}", axconfig::plat::CPU_NUM));
+    let ld_content = ld_content.replace("%CPU_NUM%", &format!("{}", axconfig::plat::MAX_CPU_NUM));
     let ld_content = ld_content.replace(
         "%DWARF%",
         if std::env::var("DWARF").is_ok_and(|v| v == "y") {

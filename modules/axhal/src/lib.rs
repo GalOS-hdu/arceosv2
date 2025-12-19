@@ -99,13 +99,13 @@ pub mod context {
     pub use axcpu::{TaskContext, TrapFrame};
 }
 
-pub use axcpu::asm;
+#[cfg(feature = "smp")]
+use core::sync::atomic::{AtomicUsize, Ordering};
 
+pub use axcpu::asm;
 #[cfg(feature = "uspace")]
 pub use axcpu::uspace;
-
 pub use axplat::init::init_later;
-
 #[cfg(feature = "smp")]
 pub use axplat::init::{init_early_secondary, init_later_secondary};
 
@@ -114,6 +114,46 @@ pub use axplat::init::{init_early_secondary, init_later_secondary};
 pub fn init_early(cpu_id: usize, arg: usize) {
     dtb::init(arg);
     axplat::init::init_early(cpu_id, arg);
+}
+/// Gets the number of CPUs running in the system.
+///
+/// When SMP is disabled, this function always returns 1.
+///
+/// When SMP is enabled, it's the smaller one between the platform-declared CPU
+/// number [`axplat::power::cpu_num`] and the configured maximum CPU number
+/// `axconfig::plat::MAX_CPU_NUM`.
+///
+/// This value is determined during the BSP initialization phase.
+pub fn cpu_num() -> usize {
+    #[cfg(feature = "smp")]
+    {
+        use spin::Lazy;
+
+        /// The number of CPUs in the system. Based on the number declared by the
+        /// platform crate and limited by the configured maximum CPU number.
+        static CPU_NUM: Lazy<usize> = Lazy::new(|| {
+            let max_cpu_num = axconfig::plat::MAX_CPU_NUM;
+            let plat_cpu_num = axplat::power::cpu_num();
+            let cpu_num = plat_cpu_num.min(max_cpu_num);
+
+            info!("CPU number: max = {max_cpu_num}, platform = {plat_cpu_num}, use = {cpu_num}");
+
+            if plat_cpu_num > max_cpu_num {
+                warn!(
+                    "platform declares more CPUs ({plat_cpu_num}) than configured max \
+                     ({max_cpu_num}), only the first {max_cpu_num} CPUs will be used."
+                );
+            }
+
+            cpu_num
+        });
+
+        *CPU_NUM
+    }
+    #[cfg(not(feature = "smp"))]
+    {
+        1
+    }
 }
 
 macro_rules! addr_of_sym {
