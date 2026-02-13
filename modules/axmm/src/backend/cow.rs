@@ -1,11 +1,11 @@
-use alloc::{boxed::Box, sync::Arc, collections::BTreeMap};
+use alloc::{boxed::Box, collections::BTreeMap, sync::Arc};
 use core::slice;
 
 use axerrno::{AxError, AxResult};
 use axfs::FileBackend;
 use axhal::{
     mem::phys_to_virt,
-    paging::{MappingFlags, PageSize, PageTableMut, PagingError},
+    paging::{MappingFlags, PageSize, PageTableCursor, PagingError},
 };
 use axsync::Mutex;
 use kspin::SpinNoIrq;
@@ -40,7 +40,6 @@ struct FrameTableRefCount {
 }
 
 impl FrameTableRefCount {
-
     const INITIAL_CNT: u8 = 1;
 
     const fn new() -> Self {
@@ -54,12 +53,21 @@ impl FrameTableRefCount {
     }
 
     fn init_frame(&mut self, paddr: PhysAddr) {
-        assert!(!self.table.contains_key(&paddr), "initializing already referenced frame");
-        self.table.insert(paddr, Arc::new(SpinNoIrq::new(FrameRefCnt(Self::INITIAL_CNT))));
+        assert!(
+            !self.table.contains_key(&paddr),
+            "initializing already referenced frame"
+        );
+        self.table.insert(
+            paddr,
+            Arc::new(SpinNoIrq::new(FrameRefCnt(Self::INITIAL_CNT))),
+        );
     }
 
     fn remove_frame(&mut self, paddr: PhysAddr) {
-        assert!(self.table.contains_key(&paddr), "removing unreferenced frame");
+        assert!(
+            self.table.contains_key(&paddr),
+            "removing unreferenced frame"
+        );
         self.table.remove(&paddr);
     }
 }
@@ -87,7 +95,7 @@ impl CowBackend {
         &self,
         vaddr: VirtAddr,
         flags: MappingFlags,
-        pt: &mut PageTableMut,
+        pt: &mut PageTableCursor,
     ) -> AxResult {
         let frame = self.alloc_new_frame(true)?;
 
@@ -117,10 +125,12 @@ impl CowBackend {
         vaddr: VirtAddr,
         paddr: PhysAddr,
         flags: MappingFlags,
-        pt: &mut PageTableMut,
+        pt: &mut PageTableCursor,
     ) -> AxResult {
         let mut frame_table = FRAME_TABLE.lock();
-        let frame = frame_table.get_frame_ref(paddr).ok_or(AxError::BadAddress)?;
+        let frame = frame_table
+            .get_frame_ref(paddr)
+            .ok_or(AxError::BadAddress)?;
         drop(frame_table);
         let mut frame = frame.lock();
         assert!(frame.0 > 0, "invalid frame reference count");
@@ -154,17 +164,25 @@ impl BackendOps for CowBackend {
         self.size
     }
 
-    fn map(&self, range: VirtAddrRange, flags: MappingFlags, _pt: &mut PageTableMut) -> AxResult {
+    fn map(
+        &self,
+        range: VirtAddrRange,
+        flags: MappingFlags,
+        _pt: &mut PageTableCursor,
+    ) -> AxResult {
         debug!("Cow::map: {range:?} {flags:?}",);
         Ok(())
     }
 
-    fn unmap(&self, range: VirtAddrRange, pt: &mut PageTableMut) -> AxResult {
+    fn unmap(&self, range: VirtAddrRange, pt: &mut PageTableCursor) -> AxResult {
         debug!("Cow::unmap: {range:?}");
         for addr in pages_in(range, self.size)? {
             if let Ok((frame, _flags, page_size)) = pt.unmap(addr) {
                 assert_eq!(page_size, self.size);
-                let frame_ref = FRAME_TABLE.lock().get_frame_ref(frame).ok_or(AxError::BadAddress)?;
+                let frame_ref = FRAME_TABLE
+                    .lock()
+                    .get_frame_ref(frame)
+                    .ok_or(AxError::BadAddress)?;
                 let mut frame_ref = frame_ref.lock();
                 frame_ref.drop_frame(frame, self.size);
             } else {
@@ -179,7 +197,7 @@ impl BackendOps for CowBackend {
         range: VirtAddrRange,
         flags: MappingFlags,
         access_flags: MappingFlags,
-        pt: &mut PageTableMut,
+        pt: &mut PageTableCursor,
     ) -> AxResult<(usize, Option<Box<dyn FnOnce(&mut AddrSpace)>>)> {
         let mut pages = 0;
         for addr in pages_in(range, self.size)? {
@@ -210,8 +228,8 @@ impl BackendOps for CowBackend {
         &self,
         range: VirtAddrRange,
         flags: MappingFlags,
-        old_pt: &mut PageTableMut,
-        new_pt: &mut PageTableMut,
+        old_pt: &mut PageTableCursor,
+        new_pt: &mut PageTableCursor,
         _new_aspace: &Arc<Mutex<AddrSpace>>,
     ) -> AxResult<Backend> {
         let cow_flags = flags - MappingFlags::WRITE;
@@ -225,7 +243,10 @@ impl BackendOps for CowBackend {
                     // - Update its permissions in the old page table using `flags`.
                     // - Map the same physical page into the new page table at the same
                     // virtual address, with the same page size and `flags`.
-                    let frame = FRAME_TABLE.lock().get_frame_ref(paddr).ok_or(AxError::BadAddress)?;
+                    let frame = FRAME_TABLE
+                        .lock()
+                        .get_frame_ref(paddr)
+                        .ok_or(AxError::BadAddress)?;
                     let mut frame = frame.lock();
                     assert!(frame.0 > 0, "referencing unreferenced frame");
                     frame.0 += 1;

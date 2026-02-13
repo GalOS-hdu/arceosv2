@@ -33,23 +33,21 @@ pub enum TaskState {
     /// Task is running on some CPU.
     Running = 1,
     /// Task is ready to run on some scheduler's ready queue.
-    Ready = 2,
+    Ready   = 2,
     /// Task is blocked (in the wait queue or timer list),
     /// and it has finished its scheduling process, it can be wake up by `notify()` on any run queue safely.
     Blocked = 3,
     /// Task is exited and waiting for being dropped.
-    Exited = 4,
+    Exited  = 4,
 }
 
 /// User-defined task extended data.
-/// # Safety
-/// See [`extern_trait`].
 #[cfg(feature = "task-ext")]
 #[extern_trait::extern_trait(
     /// The impl proxy type for [`TaskExt`].
     pub AxTaskExt
 )]
-pub unsafe trait TaskExt {
+pub trait TaskExt {
     /// Called when the task is switched in.
     fn on_enter(&self) {}
     /// Called when the task is switched out.
