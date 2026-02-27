@@ -208,6 +208,12 @@ fn handle_vsock_event(event: VsockDriverEvent, dev: &mut AxVsockDevice, buf: &mu
             }
         }
 
+        VsockDriverEvent::CreditUpdate(conn_id) => {
+            if let Err(e) = manager.on_credit_update(conn_id) {
+                warn!("Failed to handle credit update: {:?}, error={:?}", conn_id, e);
+            }
+        }
+
         VsockDriverEvent::Unknown => warn!("Received unknown vsock event"),
     }
 }
@@ -236,9 +242,26 @@ pub fn vsock_connect(conn_id: VsockConnId) -> AxResult<()> {
 }
 
 pub fn vsock_send(conn_id: VsockConnId, buf: &[u8]) -> AxResult<usize> {
-    let mut guard = VSOCK_DEVICE.lock();
-    let dev = guard.as_mut().ok_or(AxError::NotFound)?;
-    dev.send(conn_id, buf).map_err(map_dev_err)
+    let max_retries  = 10;    // Tests have shown that no more than two retries will be notified
+    for _ in 0..max_retries {
+        let result = {
+            let mut guard = VSOCK_DEVICE.lock();
+            let dev = guard.as_mut().ok_or(AxError::NotFound)?;
+            dev.send(conn_id, buf)
+        };
+        match result {
+            Ok(len) => return Ok(len),
+            Err(DevError::Again) => {
+                let manager = VSOCK_CONN_MANAGER.lock();
+                if let Some(conn) = manager.get_connection(conn_id) {
+                    drop(manager);
+                    conn.lock().wait_for_tx();
+                };
+            }
+            Err(e) => return Err(map_dev_err(e)), 
+        }
+    }
+    Err(map_dev_err(DevError::Again))
 }
 
 pub fn vsock_disconnect(conn_id: VsockConnId) -> AxResult<()> {
