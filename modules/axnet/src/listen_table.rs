@@ -16,12 +16,12 @@ use crate::{
 
 const PORT_NUM: usize = 65536;
 
-struct ListenTableEntry {
+struct ListenTableEntryInner {
     listen_endpoint: IpListenEndpoint,
     syn_queue: VecDeque<SocketHandle>,
 }
 
-impl ListenTableEntry {
+impl ListenTableEntryInner {
     pub fn new(listen_endpoint: IpListenEndpoint) -> Self {
         Self {
             listen_endpoint,
@@ -30,7 +30,7 @@ impl ListenTableEntry {
     }
 }
 
-impl Drop for ListenTableEntry {
+impl Drop for ListenTableEntryInner {
     fn drop(&mut self) {
         for &handle in &self.syn_queue {
             SOCKET_SET.remove(handle);
@@ -38,8 +38,10 @@ impl Drop for ListenTableEntry {
     }
 }
 
+type ListenTableEntry = Arc<Mutex<Option<Box<ListenTableEntryInner>>>>;
+
 pub struct ListenTable {
-    tcp: Box<[Arc<Mutex<Option<Box<ListenTableEntry>>>>]>,
+    tcp: Box<[ListenTableEntry]>,
 }
 
 impl ListenTable {
@@ -63,7 +65,7 @@ impl ListenTable {
         assert_ne!(port, 0);
         let mut entry = self.tcp[port as usize].lock();
         if entry.is_none() {
-            *entry = Some(Box::new(ListenTableEntry::new(listen_endpoint)));
+            *entry = Some(Box::new(ListenTableEntryInner::new(listen_endpoint)));
             Ok(())
         } else {
             warn!("socket already listening on port {port}");
@@ -76,7 +78,7 @@ impl ListenTable {
         *self.tcp[port as usize].lock() = None;
     }
 
-    fn listen_entry(&self, port: u16) -> Arc<Mutex<Option<Box<ListenTableEntry>>>> {
+    fn listen_entry(&self, port: u16) -> Arc<Mutex<Option<Box<ListenTableEntryInner>>>> {
         self.tcp[port as usize].clone()
     }
 

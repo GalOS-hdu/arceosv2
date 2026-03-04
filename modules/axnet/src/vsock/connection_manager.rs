@@ -7,6 +7,7 @@ use axtask::WaitQueue;
 use ringbuf::{HeapCons, HeapProd, HeapRb, traits::*};
 
 use super::{VsockAddr, VsockConnId};
+use crate::device::{start_vsock_poll, stop_vsock_poll};
 
 pub const VSOCK_RX_BUFFER_SIZE: usize = 64 * 1024; // 64KB receive buffer
 const VSOCK_ACCEPT_QUEUE_SIZE: usize = 128; // accept queue size
@@ -367,7 +368,7 @@ impl VsockConnectionManager {
         if self.connections.contains_key(&conn_id) {
             info!("Connection {:?} already exists, overwriting", conn_id);
         } else {
-            crate::device::start_vsock_poll();
+            start_vsock_poll();
         }
         self.connections.insert(conn_id, conn.clone());
         debug!(
@@ -386,7 +387,8 @@ impl VsockConnectionManager {
     pub fn remove_connection(&mut self, conn_id: VsockConnId) {
         if let Some(conn) = self.connections.remove(&conn_id) {
             let conn = conn.lock();
-            crate::device::stop_vsock_poll();
+
+            stop_vsock_poll();
             debug!(
                 "Removed connection {:?}: rx={} bytes, tx={} bytes, dropped={} bytes",
                 conn_id, conn.rx_bytes, conn.tx_bytes, conn.dropped_bytes
@@ -420,7 +422,7 @@ impl VsockConnectionManager {
 
         // 加入 accept 队列
         let mut queue_guard = queue.lock();
-        if let Err(_) = queue_guard.accept_queue.push(conn_id) {
+        if queue_guard.accept_queue.push(conn_id).is_err() {
             info!(
                 "Accept queue full for port {}, dropping connection from {:?}",
                 conn_id.local_port, conn_id.peer_addr

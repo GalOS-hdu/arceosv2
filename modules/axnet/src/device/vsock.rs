@@ -1,4 +1,4 @@
-use alloc::collections::VecDeque;
+use alloc::{collections::VecDeque, string::ToString};
 use core::{
     sync::atomic::{AtomicBool, AtomicU64, Ordering},
     time::Duration,
@@ -9,7 +9,7 @@ use axerrno::{AxError, AxResult, ax_bail};
 use axsync::Mutex;
 use axtask::future::{block_on, interruptible};
 
-use crate::{alloc::string::ToString, vsock::connection_manager::VSOCK_CONN_MANAGER};
+use crate::vsock::connection_manager::VSOCK_CONN_MANAGER;
 
 // we need a global and static only one vsock device
 static VSOCK_DEVICE: Mutex<Option<AxVsockDevice>> = Mutex::new(None);
@@ -210,7 +210,10 @@ fn handle_vsock_event(event: VsockDriverEvent, dev: &mut AxVsockDevice, buf: &mu
 
         VsockDriverEvent::CreditUpdate(conn_id) => {
             if let Err(e) = manager.on_credit_update(conn_id) {
-                warn!("Failed to handle credit update: {:?}, error={:?}", conn_id, e);
+                warn!(
+                    "Failed to handle credit update: {:?}, error={:?}",
+                    conn_id, e
+                );
             }
         }
 
@@ -242,7 +245,7 @@ pub fn vsock_connect(conn_id: VsockConnId) -> AxResult<()> {
 }
 
 pub fn vsock_send(conn_id: VsockConnId, buf: &[u8]) -> AxResult<usize> {
-    let max_retries  = 10;    // Tests have shown that no more than two retries will be notified
+    let max_retries = 10; // Tests have shown that no more than two retries will be notified
     for _ in 0..max_retries {
         let result = {
             let mut guard = VSOCK_DEVICE.lock();
@@ -258,7 +261,7 @@ pub fn vsock_send(conn_id: VsockConnId, buf: &[u8]) -> AxResult<usize> {
                     conn.lock().wait_for_tx();
                 };
             }
-            Err(e) => return Err(map_dev_err(e)), 
+            Err(e) => return Err(map_dev_err(e)),
         }
     }
     Err(map_dev_err(DevError::Again))

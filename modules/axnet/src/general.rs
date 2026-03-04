@@ -9,7 +9,7 @@ use axpoll::{IoEvents, Pollable};
 use axtask::future::{block_on, poll_io, timeout};
 
 use crate::{
-    SERVICE,
+    get_service,
     options::{Configurable, GetSocketOption, SetSocketOption},
 };
 
@@ -70,7 +70,7 @@ impl GeneralOptions {
     }
 
     pub fn register_waker(&self, waker: &Waker) {
-        SERVICE.lock().register_waker(self.device_mask(), waker);
+        get_service().register_waker(self.device_mask(), waker);
     }
 
     pub fn send_poller<P: Pollable, F: FnMut() -> AxResult<T>, T>(

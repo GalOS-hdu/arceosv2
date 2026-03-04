@@ -3,8 +3,9 @@
 #![allow(unused_imports)]
 #![allow(dead_code)]
 
-use super::prelude::*;
 use cfg_if::cfg_if;
+
+use super::prelude::*;
 
 cfg_if! {
     if #[cfg(net_dev = "dummy")] {
@@ -176,7 +177,7 @@ cfg_if! {
             fn abort(&mut self, _cid: VsockConnId) -> DevResult<()> {
                 Err(DevError::Unsupported)
             }
-            fn poll_event(&mut self, _buf: &mut [u8]) -> DevResult<Option<VsockDriverEvent>> {
+            fn poll_event(&mut self) -> DevResult<Option<VsockDriverEvent>> {
                 Err(DevError::Unsupported)
             }
         }

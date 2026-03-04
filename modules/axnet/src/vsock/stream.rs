@@ -9,6 +9,7 @@ use axsync::Mutex;
 use super::connection_manager::*;
 use crate::{
     RecvFlags, RecvOptions, SendOptions, Shutdown,
+    device::*,
     general::GeneralOptions,
     options::{Configurable, GetSocketOption, SetSocketOption},
     state::*,
@@ -81,7 +82,7 @@ impl VsockTransportOps for VsockStreamTransport {
 
             // register in the global listen table
             VSOCK_CONN_MANAGER.lock().listen(local_addr)?;
-            crate::device::vsock_listen(local_addr)?;
+            vsock_listen(local_addr)?;
             // set state
             conn.lock().set_state(ConnectionState::Listening);
             trace!("Vsock listening on {:?}", local_addr);
@@ -152,7 +153,7 @@ impl VsockTransportOps for VsockStreamTransport {
             drop(existing_conn);
 
             let local_addr = VsockAddr {
-                cid: crate::device::vsock_guest_cid()?,
+                cid: vsock_guest_cid()?,
                 port: local_port,
             };
 
@@ -174,7 +175,7 @@ impl VsockTransportOps for VsockStreamTransport {
             drop(manager);
 
             // driver connect
-            crate::device::vsock_connect(conn_id)?;
+            vsock_connect(conn_id)?;
             debug!("Vsock connecting from {} to {:?}", local_port, peer_addr);
             Ok(())
         })?;
@@ -207,9 +208,7 @@ impl VsockTransportOps for VsockStreamTransport {
         drop(conn_guard);
 
         // now virtio-driver only support non-blocking send
-        let result = src.write_to(&mut axio::write_fn(|buf| {
-            crate::device::vsock_send(conn_id, buf)
-        }));
+        let result = src.write_to(&mut axio::write_fn(|buf| vsock_send(conn_id, buf)));
         conn.lock().add_tx_bytes(result.unwrap_or(0));
         result
     }
@@ -255,7 +254,7 @@ impl VsockTransportOps for VsockStreamTransport {
                 );
                 Ok(count)
             } else {
-                return Err(AxError::WouldBlock);
+                Err(AxError::WouldBlock)
             }
         })
     }
@@ -274,7 +273,7 @@ impl VsockTransportOps for VsockStreamTransport {
 
         if let Some(conn_id) = *self.conn_id.lock() {
             if conn.state() == ConnectionState::Connected {
-                crate::device::vsock_disconnect(conn_id)?;
+                vsock_disconnect(conn_id)?;
             } else if conn.state() == ConnectionState::Listening {
                 VSOCK_CONN_MANAGER.lock().unlisten(conn_id.local_port);
             }

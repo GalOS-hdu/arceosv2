@@ -38,11 +38,11 @@ use alloc::{borrow::ToOwned, boxed::Box};
 
 use axdriver::{AxDeviceContainer, prelude::*};
 use axsync::Mutex;
-use lazyinit::LazyInit;
 use smoltcp::wire::{EthernetAddress, Ipv4Address, Ipv4Cidr};
-pub use socket::*;
+use spin::{Lazy, Once};
 
-use crate::{
+pub use self::socket::*;
+use self::{
     consts::{GATEWAY, IP, IP_PREFIX},
     device::{EthernetDevice, LoopbackDevice},
     listen_table::ListenTable,
@@ -51,10 +51,17 @@ use crate::{
     wrapper::SocketSetWrapper,
 };
 
-static LISTEN_TABLE: LazyInit<ListenTable> = LazyInit::new();
-static SOCKET_SET: LazyInit<SocketSetWrapper> = LazyInit::new();
+static LISTEN_TABLE: Lazy<ListenTable> = Lazy::new(ListenTable::new);
+static SOCKET_SET: Lazy<SocketSetWrapper> = Lazy::new(SocketSetWrapper::new);
 
-static SERVICE: LazyInit<Mutex<Service>> = LazyInit::new();
+static SERVICE: Once<Mutex<Service>> = Once::new();
+
+fn get_service() -> axsync::MutexGuard<'static, Service> {
+    SERVICE
+        .get()
+        .expect("Network service not initialized")
+        .lock()
+}
 
 /// Initializes the network subsystem by NIC devices.
 pub fn init_network(mut net_devs: AxDeviceContainer<AxNetDevice>) {
@@ -111,16 +118,13 @@ pub fn init_network(mut net_devs: AxDeviceContainer<AxNetDevice>) {
             ip_addrs.push(eth0_ip.into()).unwrap();
         }
     });
-    SERVICE.init_once(Mutex::new(service));
-
-    SOCKET_SET.init_once(SocketSetWrapper::new());
-    LISTEN_TABLE.init_once(ListenTable::new());
+    SERVICE.call_once(|| Mutex::new(service));
 }
 
 /// Init vsock subsystem by vsock devices.
 #[cfg(feature = "vsock")]
 pub fn init_vsock(mut vsock_devs: AxDeviceContainer<AxVsockDevice>) {
-    use crate::device::register_vsock_device;
+    use self::device::register_vsock_device;
     info!("Initialize vsock subsystem...");
     if let Some(dev) = vsock_devs.take_one() {
         info!("  use vsock 0: {:?}", dev.device_name());
@@ -133,5 +137,5 @@ pub fn init_vsock(mut vsock_devs: AxDeviceContainer<AxVsockDevice>) {
 }
 
 pub fn poll_interfaces() {
-    while SERVICE.lock().poll(&mut SOCKET_SET.inner.lock()) {}
+    while get_service().poll(&mut SOCKET_SET.inner.lock()) {}
 }

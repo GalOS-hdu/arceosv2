@@ -16,11 +16,12 @@ use smoltcp::{
     wire::{IpEndpoint, IpListenEndpoint},
 };
 
-use super::{LISTEN_TABLE, SOCKET_SET};
 use crate::{
-    RecvFlags, RecvOptions, SERVICE, SendOptions, Shutdown, Socket, SocketAddrEx, SocketOps,
+    LISTEN_TABLE, RecvFlags, RecvOptions, SOCKET_SET, SendOptions, Shutdown, Socket, SocketAddrEx,
+    SocketOps,
     consts::{TCP_RX_BUF_LEN, TCP_TX_BUF_LEN},
     general::GeneralOptions,
+    get_service,
     options::{Configurable, GetSocketOption, SetSocketOption},
     poll_interfaces,
     state::*,
@@ -71,7 +72,7 @@ impl TcpSocket {
         result.with_smol_socket(|socket| {
             result
                 .general
-                .set_device_mask(SERVICE.lock().device_mask_for(&socket.get_bound_endpoint()));
+                .set_device_mask(get_service().device_mask_for(&socket.get_bound_endpoint()));
         });
         result
     }
@@ -232,7 +233,7 @@ impl SocketOps for TcpSocket {
                     };
                     socket.set_bound_endpoint(endpoint);
                     self.general
-                        .set_device_mask(SERVICE.lock().device_mask_for(&endpoint));
+                        .set_device_mask(get_service().device_mask_for(&endpoint));
                     Ok(())
                 })?;
                 debug!("TCP socket {}: binding to {}", self.handle, local_addr);
@@ -260,7 +261,7 @@ impl SocketOps for TcpSocket {
                     self.with_smol_socket(|socket| socket.get_bound_endpoint());
                 if bound_endpoint.addr.is_none() {
                     bound_endpoint.addr =
-                        Some(SERVICE.lock().get_source_address(&remote_endpoint.addr));
+                        Some(get_service().get_source_address(&remote_endpoint.addr));
                 }
                 if bound_endpoint.port == 0 {
                     bound_endpoint.port = get_ephemeral_port()?;
@@ -273,10 +274,10 @@ impl SocketOps for TcpSocket {
                 self.with_smol_socket(|socket| {
                     socket.set_bound_endpoint(bound_endpoint);
                     self.general
-                        .set_device_mask(SERVICE.lock().device_mask_for(&bound_endpoint));
+                        .set_device_mask(get_service().device_mask_for(&bound_endpoint));
                     socket
                         .connect(
-                            crate::SERVICE.lock().iface.context(),
+                            get_service().iface.context(),
                             remote_endpoint,
                             bound_endpoint,
                         )

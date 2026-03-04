@@ -18,9 +18,10 @@ use smoltcp::{
 use spin::RwLock;
 
 use crate::{
-    RecvFlags, RecvOptions, SERVICE, SOCKET_SET, SendOptions, Shutdown, SocketAddrEx, SocketOps,
+    RecvFlags, RecvOptions, SOCKET_SET, SendOptions, Shutdown, SocketAddrEx, SocketOps,
     consts::{UDP_RX_BUF_LEN, UDP_TX_BUF_LEN},
     general::GeneralOptions,
+    get_service,
     options::{Configurable, GetSocketOption, SetSocketOption},
     poll_interfaces,
 };
@@ -141,7 +142,7 @@ impl SocketOps for UdpSocket {
             })
         })?;
         self.general
-            .set_device_mask(SERVICE.lock().device_mask_for(&endpoint));
+            .set_device_mask(get_service().device_mask_for(&endpoint));
 
         *guard = Some(local_endpoint);
         info!("UDP socket {}: bound on {}", self.handle, endpoint);
@@ -159,7 +160,7 @@ impl SocketOps for UdpSocket {
         }
 
         let remote_addr = IpEndpoint::from(remote_addr);
-        let src = SERVICE.lock().get_source_address(&remote_addr.addr);
+        let src = get_service().get_source_address(&remote_addr.addr);
         *guard = Some((remote_addr, src));
         debug!("UDP socket {}: connected to {}", self.handle, remote_addr);
         Ok(())
@@ -169,7 +170,7 @@ impl SocketOps for UdpSocket {
         let (remote_addr, source_addr) = match options.to {
             Some(addr) => {
                 let addr = IpEndpoint::from(addr.into_ip()?);
-                let src = SERVICE.lock().get_source_address(&addr.addr);
+                let src = get_service().get_source_address(&addr.addr);
                 (addr, src)
             }
             None => self.remote_endpoint()?,
