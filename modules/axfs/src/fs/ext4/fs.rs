@@ -6,10 +6,10 @@ use axfs_ng_vfs::{
     DirEntry, DirNode, Filesystem, FilesystemOps, Reference, StatFs, VfsResult, path::MAX_NAME_LEN,
 };
 use kspin::{SpinNoPreempt as Mutex, SpinNoPreemptGuard as MutexGuard};
-use lwext4_rust::{FsConfig, ffi::EXT4_ROOT_INO};
 
 use super::{
-    Ext4Disk, Inode,
+    Ext4CoreDisk, Inode,
+    wrapper::{FsConfig, EXT4_ROOT_INO},
     util::{LwExt4Filesystem, into_vfs_err},
 };
 
@@ -23,7 +23,7 @@ pub struct Ext4Filesystem {
 impl Ext4Filesystem {
     pub fn new(dev: AxBlockDevice) -> VfsResult<Filesystem> {
         let ext4 =
-            lwext4_rust::Ext4Filesystem::new(Ext4Disk(dev), EXT4_CONFIG).map_err(into_vfs_err)?;
+            LwExt4Filesystem::new(Ext4CoreDisk::new(dev), EXT4_CONFIG).map_err(into_vfs_err)?;
 
         let fs = Arc::new(Self {
             inner: Mutex::new(ext4),
@@ -36,14 +36,16 @@ impl Ext4Filesystem {
         Ok(Filesystem::new(fs))
     }
 
-    pub(crate) fn lock(&self) -> MutexGuard<'_, LwExt4Filesystem> {
+    pub(crate) fn lock(&self) -> MutexGuard<LwExt4Filesystem> {
         self.inner.lock()
     }
+
 }
 
 unsafe impl Send for Ext4Filesystem {}
 
 unsafe impl Sync for Ext4Filesystem {}
+
 
 impl FilesystemOps for Ext4Filesystem {
     fn name(&self) -> &str {

@@ -7,10 +7,10 @@ use axfs_ng_vfs::{
     VfsResult, WeakDirEntry,
 };
 use axpoll::{IoEvents, Pollable};
-use lwext4_rust::{FileAttr, InodeType};
 
 use super::{
     Ext4Filesystem,
+    wrapper::{FileAttr, InodeType},
     util::{LwExt4Filesystem, into_vfs_err, into_vfs_type},
 };
 
@@ -25,7 +25,7 @@ impl Inode {
         Arc::new(Self { fs, ino, this })
     }
 
-    fn create_entry(&self, entry: &lwext4_rust::DirEntry, name: impl Into<String>) -> DirEntry {
+    fn create_entry(&self, entry: &super::wrapper::DirEntry, name: impl Into<String>) -> DirEntry {
         let reference = Reference::new(
             self.this.as_ref().and_then(WeakDirEntry::upgrade),
             name.into(),
@@ -45,7 +45,7 @@ impl Inode {
     }
 
     fn lookup_locked(&self, fs: &mut LwExt4Filesystem, name: &str) -> VfsResult<DirEntry> {
-        let mut result = fs.lookup(self.ino, name).map_err(into_vfs_err)?;
+        let result = fs.lookup(self.ino, name).map_err(into_vfs_err)?;
         let entry = result.entry();
         Ok(self.create_entry(&entry, name))
     }
@@ -73,7 +73,7 @@ impl NodeOps for Inode {
         Ok(Metadata {
             inode: self.ino as _,
             device: attr.device,
-            nlink: attr.nlink,
+            nlink: attr.nlink as u64,
             mode: NodePermission::from_bits_truncate(attr.mode as u16),
             node_type: into_vfs_type(attr.node_type),
             uid: attr.uid,
@@ -82,9 +82,9 @@ impl NodeOps for Inode {
             block_size: attr.block_size,
             blocks: attr.blocks,
             rdev: DeviceId::default(),
-            atime: attr.atime,
-            mtime: attr.mtime,
-            ctime: attr.ctime,
+            atime: core::time::Duration::from_secs(attr.atime),
+            mtime: core::time::Duration::from_secs(attr.mtime),
+            ctime: core::time::Duration::from_secs(attr.ctime),
         })
     }
 
@@ -92,7 +92,8 @@ impl NodeOps for Inode {
         let mut fs = self.fs.lock();
         fs.with_inode_ref(self.ino, |inode| {
             if let Some(mode) = update.mode {
-                inode.set_mode((inode.mode() & !0xfff) | (mode.bits() as u32));
+                let current_mode = inode.mode();
+                inode.set_mode((current_mode & !0xfff) | (mode.bits() as u32));
             }
             if let Some((uid, gid)) = update.owner {
                 inode.set_owner(uid as _, gid as _);
@@ -122,7 +123,8 @@ impl NodeOps for Inode {
     }
 
     fn sync(&self, _data_only: bool) -> VfsResult<()> {
-        Ok(())
+        // 刷新文件系统缓存，确保所有脏数据写入磁盘
+        self.fs.flush()
     }
 
     fn into_any(self: Arc<Self>) -> Arc<dyn Any + Send + Sync> {
@@ -131,6 +133,35 @@ impl NodeOps for Inode {
 
     fn flags(&self) -> NodeFlags {
         NodeFlags::BLOCKING
+    }
+
+    fn listxattr(&self, buffer: &mut [u8]) -> VfsResult<usize> {
+        self.fs
+            .lock()
+            .listxattr(self.ino, buffer)
+            .map_err(into_vfs_err)
+    }
+
+    fn getxattr(&self, name: &str, buffer: &mut [u8]) -> VfsResult<usize> {
+        self.fs
+            .lock()
+            .getxattr(self.ino, name, buffer)
+            .map_err(into_vfs_err)
+    }
+
+    fn setxattr(&self, name: &str, value: &[u8], _flags: u32) -> VfsResult<()> {
+        // TODO: 处理 flags (XATTR_CREATE, XATTR_REPLACE)
+        self.fs
+            .lock()
+            .setxattr(self.ino, name, value)
+            .map_err(into_vfs_err)
+    }
+
+    fn removexattr(&self, name: &str) -> VfsResult<()> {
+        self.fs
+            .lock()
+            .removexattr(self.ino, name)
+            .map_err(into_vfs_err)
     }
 }
 
