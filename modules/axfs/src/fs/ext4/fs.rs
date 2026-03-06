@@ -36,7 +36,7 @@ impl Ext4Filesystem {
         Ok(Filesystem::new(fs))
     }
 
-    pub(crate) fn lock(&self) -> MutexGuard<LwExt4Filesystem> {
+    pub(crate) fn lock(&self) -> MutexGuard<'_, LwExt4Filesystem> {
         self.inner.lock()
     }
 

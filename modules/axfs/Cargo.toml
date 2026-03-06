@@ -36,7 +36,8 @@ slab = { version = "0.4.9", default-features = false }
 spin = { workspace = true }
 
 [dependencies.lwext4_core]
-path = "/home/c20h30o2/files/lwext4-rust/lwext4_core"
+git = "https://github.com/GalOS-hdu/lwext4_core.git"
+rev = "896fbf2"
 default-features = true
 optional = true
 
