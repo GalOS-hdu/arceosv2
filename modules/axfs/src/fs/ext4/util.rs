@@ -16,8 +16,10 @@ pub fn into_vfs_err(err: Ext4Error) -> VfsError {
     let linux_error = LinuxError::try_from(err.code).unwrap_or(LinuxError::EIO);
 
     if linux_error != LinuxError::ENOENT {
-        warn!("[ext4] Error occurred: code={} ({:?}), message={:?}",
-              err.code, linux_error, err.message);
+        warn!(
+            "[ext4] Error occurred: code={} ({:?}), message={:?}",
+            err.code, linux_error, err.message
+        );
     }
 
     let vfs_err = VfsError::from(linux_error).canonicalize();

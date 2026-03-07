@@ -3,24 +3,20 @@
 //! 提供与 lwext4_rust 兼容的接口，使得可以无缝替换
 
 use alloc::{string::String, vec::Vec};
-use axerrno::LinuxError;
 use core::time::Duration;
 
-use super::ArceOsHal;
-
-// ===== 类型重导出 =====
-
-/// 文件系统配置（兼容 lwext4_rust::FsConfig）
-pub use lwext4_core::FsConfig;
-
-/// Inode 类型（兼容 lwext4_rust::InodeType）
-pub use lwext4_core::InodeType;
-
+use axerrno::LinuxError;
 /// 文件属性（兼容 lwext4_rust::FileAttr）
 pub use lwext4_core::FileAttr;
-
+// ===== 类型重导出 =====
+/// 文件系统配置（兼容 lwext4_rust::FsConfig）
+pub use lwext4_core::FsConfig;
+/// Inode 类型（兼容 lwext4_rust::InodeType）
+pub use lwext4_core::InodeType;
 /// SystemHal trait（兼容 lwext4_rust::SystemHal）
 pub use lwext4_core::SystemHal;
+
+use super::ArceOsHal;
 
 /// 根目录 inode 编号
 pub const EXT4_ROOT_INO: u32 = 2;
@@ -86,7 +82,7 @@ impl DirEntry {
 
     pub fn inode_type(&self) -> InodeType {
         // 将 u8 文件类型转换为 InodeType
-        use lwext4_core::dir::write::{EXT4_DE_REG_FILE, EXT4_DE_DIR, EXT4_DE_SYMLINK};
+        use lwext4_core::dir::write::{EXT4_DE_DIR, EXT4_DE_REG_FILE, EXT4_DE_SYMLINK};
 
         match self.inner.file_type {
             EXT4_DE_DIR => InodeType::Directory,
@@ -108,7 +104,7 @@ pub struct LookupResult {
 
 impl LookupResult {
     pub fn entry(&self) -> DirEntry {
-        use lwext4_core::dir::write::{EXT4_DE_REG_FILE, EXT4_DE_DIR, EXT4_DE_SYMLINK};
+        use lwext4_core::dir::write::{EXT4_DE_DIR, EXT4_DE_REG_FILE, EXT4_DE_SYMLINK};
 
         let file_type = match self.inode_type {
             InodeType::Directory => EXT4_DE_DIR,
@@ -282,8 +278,7 @@ impl<H: SystemHal, D: lwext4_core::BlockDevice> Ext4Filesystem<H, D> {
         // let bdev = lwext4_core::BlockDev::new(device)
         //     .map_err(Ext4Error::from_core_error)?;
 
-        let inner = lwext4_core::Ext4FileSystem::mount(bdev)
-            .map_err(Ext4Error::from_core_error)?;
+        let inner = lwext4_core::Ext4FileSystem::mount(bdev).map_err(Ext4Error::from_core_error)?;
 
         Ok(Self {
             inner,
@@ -380,10 +375,16 @@ impl<H: SystemHal, D: lwext4_core::BlockDevice> Ext4Filesystem<H, D> {
     /// 读取文件数据
     pub fn read_at(&mut self, ino: u32, buf: &mut [u8], offset: u64) -> Ext4Result<usize> {
         if buf.len() > 0 {
-            info!("[ext4] READ: ino={}, len={}, offset={}", ino, buf.len(), offset);
+            info!(
+                "[ext4] READ: ino={}, len={}, offset={}",
+                ino,
+                buf.len(),
+                offset
+            );
         }
 
-        let result = self.inner
+        let result = self
+            .inner
             .read_at_inode(ino, buf, offset)
             .map_err(Ext4Error::from_core_error);
 
@@ -397,13 +398,23 @@ impl<H: SystemHal, D: lwext4_core::BlockDevice> Ext4Filesystem<H, D> {
                 // 对于稀疏文件，读取未分配的块应该返回零，而不是错误
                 if e.code == 2 && e.message == Some("Logical block not found in extent tree") {
                     // 这是稀疏文件的空洞，填充零并返回成功
-                    info!("[ext4] READ sparse hole: ino={}, len={}, offset={}, returning zeros",
-                          ino, buf.len(), offset);
+                    info!(
+                        "[ext4] READ sparse hole: ino={}, len={}, offset={}, returning zeros",
+                        ino,
+                        buf.len(),
+                        offset
+                    );
                     buf.fill(0);
                     Ok(buf.len())
                 } else {
                     // 其他错误正常报告
-                    warn!("[ext4] READ FAILED: ino={}, len={}, offset={}, error={:?}", ino, buf.len(), offset, e);
+                    warn!(
+                        "[ext4] READ FAILED: ino={}, len={}, offset={}, error={:?}",
+                        ino,
+                        buf.len(),
+                        offset,
+                        e
+                    );
                     Err(e)
                 }
             }
@@ -414,18 +425,29 @@ impl<H: SystemHal, D: lwext4_core::BlockDevice> Ext4Filesystem<H, D> {
     pub fn write_at(&mut self, ino: u32, buf: &[u8], offset: u64) -> Ext4Result<usize> {
         // 记录所有写入操作（降低阈值以捕获小文件写入）
         if buf.len() > 0 {
-            info!("[ext4] WRITE: ino={}, len={}, offset={}", ino, buf.len(), offset);
+            info!(
+                "[ext4] WRITE: ino={}, len={}, offset={}",
+                ino,
+                buf.len(),
+                offset
+            );
         }
 
         // 🚀 性能优化：使用批量写入接口，避免重复获取InodeRef
-        let result = self.inner
+        let result = self
+            .inner
             .write_at_inode_batch(ino, buf, offset)
             .map_err(Ext4Error::from_core_error);
 
         match &result {
             Ok(written) => info!("[ext4] WRITE SUCCESS: ino={}, written={}", ino, written),
-            Err(e) => warn!("[ext4] WRITE FAILED: ino={}, len={}, offset={}, error={:?}",
-                           ino, buf.len(), offset, e),
+            Err(e) => warn!(
+                "[ext4] WRITE FAILED: ino={}, len={}, offset={}, error={:?}",
+                ino,
+                buf.len(),
+                offset,
+                e
+            ),
         }
 
         result
@@ -436,7 +458,8 @@ impl<H: SystemHal, D: lwext4_core::BlockDevice> Ext4Filesystem<H, D> {
         info!("[ext4] SET_LEN: ino={}, new_len={}", ino, len);
 
         // 获取当前文件大小
-        let current_size = self.inner
+        let current_size = self
+            .inner
             .with_inode_ref(ino, |inode| inode.size())
             .map_err(Ext4Error::from_core_error)?;
 
@@ -448,7 +471,11 @@ impl<H: SystemHal, D: lwext4_core::BlockDevice> Ext4Filesystem<H, D> {
             info!(
                 "[ext4] SET_LEN: ino={}, {} from {} to {} (sparse)",
                 ino,
-                if len > current_size { "expanding" } else { "shrinking" },
+                if len > current_size {
+                    "expanding"
+                } else {
+                    "shrinking"
+                },
                 current_size,
                 len
             );
@@ -484,13 +511,15 @@ impl<H: SystemHal, D: lwext4_core::BlockDevice> Ext4Filesystem<H, D> {
         } else {
             // 慢速符号链接：写入数据块
             // write_at_inode_batch 会自动更新文件大小，无需手动调用 truncate_file
-            let written = self.inner.write_at_inode_batch(ino, target, 0)
+            let written = self
+                .inner
+                .write_at_inode_batch(ino, target, 0)
                 .map_err(Ext4Error::from_core_error)?;
 
             if written != target.len() {
                 return Err(Ext4Error::new(
                     LinuxError::EIO as i32,
-                    Some("Failed to write symlink target")
+                    Some("Failed to write symlink target"),
                 ));
             }
             Ok(())
@@ -575,7 +604,7 @@ impl<H: SystemHal, D: lwext4_core::BlockDevice> Ext4Filesystem<H, D> {
         inode_type: InodeType,
         mode: u32,
     ) -> Ext4Result<u32> {
-        use lwext4_core::dir::write::{EXT4_DE_REG_FILE, EXT4_DE_DIR, EXT4_DE_SYMLINK};
+        use lwext4_core::dir::write::{EXT4_DE_DIR, EXT4_DE_REG_FILE, EXT4_DE_SYMLINK};
 
         let file_type = match inode_type {
             InodeType::RegularFile => EXT4_DE_REG_FILE,
@@ -585,7 +614,7 @@ impl<H: SystemHal, D: lwext4_core::BlockDevice> Ext4Filesystem<H, D> {
                 return Err(Ext4Error::new(
                     LinuxError::EOPNOTSUPP as i32,
                     Some("Unsupported inode type"),
-                ))
+                ));
             }
         };
 
@@ -594,17 +623,20 @@ impl<H: SystemHal, D: lwext4_core::BlockDevice> Ext4Filesystem<H, D> {
         // 这是标准的 Unix 行为，防止创建完全无权限的文件
         let effective_mode = if mode & 0o777 == 0 {
             match inode_type {
-                InodeType::Directory => 0o755,  // rwxr-xr-x
-                _ => 0o644,  // rw-r--r--
+                InodeType::Directory => 0o755, // rwxr-xr-x
+                _ => 0o644,                    // rw-r--r--
             }
         } else {
-            mode & 0o777  // 只保留权限位
+            mode & 0o777 // 只保留权限位
         };
 
-        info!("[ext4] CREATE: parent_ino={}, name={:?}, type={:?}, mode={:#o}, effective_mode={:#o}",
-              parent_ino, name, inode_type, mode, effective_mode);
+        info!(
+            "[ext4] CREATE: parent_ino={}, name={:?}, type={:?}, mode={:#o}, effective_mode={:#o}",
+            parent_ino, name, inode_type, mode, effective_mode
+        );
 
-        let result = self.inner
+        let result = self
+            .inner
             .create_in_dir(parent_ino, name, file_type, effective_mode as u16)
             .map_err(Ext4Error::from_core_error);
 
@@ -612,16 +644,17 @@ impl<H: SystemHal, D: lwext4_core::BlockDevice> Ext4Filesystem<H, D> {
             Ok(ino) => {
                 info!("[ext4] CREATE SUCCESS: new_ino={}", ino);
                 // 设置新创建文件的时间戳为当前时间
-                let now = core::time::Duration::from_secs(
-                    axhal::time::wall_time().as_secs()
-                );
+                let now = core::time::Duration::from_secs(axhal::time::wall_time().as_secs());
                 if let Err(e) = self.with_inode_ref(*ino, |inode| {
                     inode.set_atime(&now);
                     inode.set_mtime(&now);
                     inode.update_ctime();
                     Ok(())
                 }) {
-                    warn!("[ext4] Failed to set timestamps for new inode {}: {:?}", ino, e);
+                    warn!(
+                        "[ext4] Failed to set timestamps for new inode {}: {:?}",
+                        ino, e
+                    );
                 }
             }
             Err(e) => warn!("[ext4] CREATE FAILED: error={:?}", e),
@@ -667,7 +700,10 @@ impl<H: SystemHal, D: lwext4_core::BlockDevice> Ext4Filesystem<H, D> {
             .with_inode_ref(ino, |inode_ref| {
                 let mut wrapper = InodeRefWrapper { inner: inode_ref };
                 f(&mut wrapper).map_err(|e| {
-                    lwext4_core::Error::new(lwext4_core::ErrorKind::Io, e.message.unwrap_or("Error"))
+                    lwext4_core::Error::new(
+                        lwext4_core::ErrorKind::Io,
+                        e.message.unwrap_or("Error"),
+                    )
                 })
             })
             .map_err(Ext4Error::from_core_error)
@@ -689,9 +725,7 @@ impl<H: SystemHal, D: lwext4_core::BlockDevice> Ext4Filesystem<H, D> {
     /// 返回所有扩展属性名称（以 null 结尾的字符串列表）
     pub fn listxattr(&mut self, ino: u32, buffer: &mut [u8]) -> Ext4Result<usize> {
         self.inner
-            .with_inode_ref(ino, |inode_ref| {
-                lwext4_core::xattr::list(inode_ref, buffer)
-            })
+            .with_inode_ref(ino, |inode_ref| lwext4_core::xattr::list(inode_ref, buffer))
             .map_err(Ext4Error::from_core_error)
     }
 
@@ -732,9 +766,7 @@ impl<H: SystemHal, D: lwext4_core::BlockDevice> Ext4Filesystem<H, D> {
     /// * `name` - 要删除的属性名
     pub fn removexattr(&mut self, ino: u32, name: &str) -> Ext4Result<()> {
         self.inner
-            .with_inode_ref(ino, |inode_ref| {
-                lwext4_core::xattr::remove(inode_ref, name)
-            })
+            .with_inode_ref(ino, |inode_ref| lwext4_core::xattr::remove(inode_ref, name))
             .map_err(Ext4Error::from_core_error)
     }
 }

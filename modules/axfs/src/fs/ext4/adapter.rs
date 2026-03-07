@@ -48,22 +48,29 @@ impl lwext4_core::BlockDevice for Ext4CoreDisk {
         let expected_size = count as usize * sector_size;
 
         if buf.len() < expected_size {
-            warn!("[adapter] Buffer too small: buf.len()={}, expected={}, lba={}, count={}",
-                  buf.len(), expected_size, lba, count);
+            warn!(
+                "[adapter] Buffer too small: buf.len()={}, expected={}, lba={}, count={}",
+                buf.len(),
+                expected_size,
+                lba,
+                count
+            );
             return Err(lwext4_core::Error::new(
                 lwext4_core::ErrorKind::InvalidInput,
-                "Buffer too small"
+                "Buffer too small",
             ));
         }
 
         // 检查是否超出设备范围
         let device_total_sectors = self.inner.num_blocks();
         if lba + count as u64 > device_total_sectors as u64 {
-            warn!("[adapter] Read out of bounds: lba={}, count={}, device_total={}",
-                  lba, count, device_total_sectors);
+            warn!(
+                "[adapter] Read out of bounds: lba={}, count={}, device_total={}",
+                lba, count, device_total_sectors
+            );
             return Err(lwext4_core::Error::new(
                 lwext4_core::ErrorKind::Io,
-                "Read out of bounds"
+                "Read out of bounds",
             ));
         }
 
@@ -71,7 +78,10 @@ impl lwext4_core::BlockDevice for Ext4CoreDisk {
         self.inner
             .read_block(lba, &mut buf[..expected_size])
             .map_err(|e| {
-                warn!("[adapter] Failed to read: lba={}, count={}, error={:?}", lba, count, e);
+                warn!(
+                    "[adapter] Failed to read: lba={}, count={}, error={:?}",
+                    lba, count, e
+                );
                 lwext4_core::Error::new(lwext4_core::ErrorKind::Io, "Block read failed")
             })?;
 
@@ -86,22 +96,29 @@ impl lwext4_core::BlockDevice for Ext4CoreDisk {
         let expected_size = count as usize * sector_size;
 
         if buf.len() < expected_size {
-            warn!("[adapter] Buffer too small: buf.len()={}, expected={}, lba={}, count={}",
-                  buf.len(), expected_size, lba, count);
+            warn!(
+                "[adapter] Buffer too small: buf.len()={}, expected={}, lba={}, count={}",
+                buf.len(),
+                expected_size,
+                lba,
+                count
+            );
             return Err(lwext4_core::Error::new(
                 lwext4_core::ErrorKind::InvalidInput,
-                "Buffer too small"
+                "Buffer too small",
             ));
         }
 
         // 检查是否超出设备范围
         let device_total_sectors = self.inner.num_blocks();
         if lba + count as u64 > device_total_sectors as u64 {
-            warn!("[adapter] Write out of bounds: lba={}, count={}, device_total={}",
-                  lba, count, device_total_sectors);
+            warn!(
+                "[adapter] Write out of bounds: lba={}, count={}, device_total={}",
+                lba, count, device_total_sectors
+            );
             return Err(lwext4_core::Error::new(
                 lwext4_core::ErrorKind::Io,
-                "Write out of bounds"
+                "Write out of bounds",
             ));
         }
 
@@ -109,7 +126,10 @@ impl lwext4_core::BlockDevice for Ext4CoreDisk {
         self.inner
             .write_block(lba, &buf[..expected_size])
             .map_err(|e| {
-                warn!("[adapter] Failed to write: lba={}, count={}, error={:?}", lba, count, e);
+                warn!(
+                    "[adapter] Failed to write: lba={}, count={}, error={:?}",
+                    lba, count, e
+                );
                 lwext4_core::Error::new(lwext4_core::ErrorKind::Io, "Block write failed")
             })?;
 
@@ -119,12 +139,10 @@ impl lwext4_core::BlockDevice for Ext4CoreDisk {
     fn flush(&mut self) -> lwext4_core::Result<()> {
         use axdriver::prelude::BlockDriverOps;
 
-        self.inner
-            .flush()
-            .map_err(|e| {
-                warn!("[adapter] Failed to flush: error={:?}", e);
-                lwext4_core::Error::new(lwext4_core::ErrorKind::Io, "Block flush failed")
-            })?;
+        self.inner.flush().map_err(|e| {
+            warn!("[adapter] Failed to flush: error={:?}", e);
+            lwext4_core::Error::new(lwext4_core::ErrorKind::Io, "Block flush failed")
+        })?;
 
         Ok(())
     }

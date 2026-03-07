@@ -10,8 +10,8 @@ use axpoll::{IoEvents, Pollable};
 
 use super::{
     Ext4Filesystem,
-    wrapper::{FileAttr, InodeType},
     util::{LwExt4Filesystem, into_vfs_err, into_vfs_type},
+    wrapper::{FileAttr, InodeType},
 };
 
 pub struct Inode {

@@ -1,10 +1,10 @@
 extern crate alloc;
 
-use crate::io;
 use alloc::string::String;
+pub use core::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6};
 use core::{iter, option, slice};
 
-pub use core::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6};
+use crate::io;
 
 /// A trait for objects which can be converted or resolved to one or more
 /// [`SocketAddr`] values.
@@ -127,8 +127,9 @@ mod no_dns {
 #[cfg(feature = "dns")]
 #[doc(cfg(feature = "net"))]
 mod dns {
-    use super::*;
     use alloc::{vec, vec::Vec};
+
+    use super::*;
 
     impl ToSocketAddrs for (&str, u16) {
         type Iter = vec::IntoIter<SocketAddr>;

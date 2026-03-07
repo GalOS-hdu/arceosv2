@@ -1,8 +1,10 @@
-use crate::io::{self, BufReader, prelude::*};
-use crate::sync::{Mutex, MutexGuard};
-
 #[cfg(feature = "alloc")]
 use alloc::{string::String, vec::Vec};
+
+use crate::{
+    io::{self, BufReader, prelude::*},
+    sync::{Mutex, MutexGuard},
+};
 
 struct StdinRaw;
 struct StdoutRaw;

@@ -40,8 +40,7 @@ mod stdio {
 }
 
 mod sys {
-    pub use axhal::cpu_num as ax_get_cpu_num;
-    pub use axhal::power::system_off as ax_terminate;
+    pub use axhal::{cpu_num as ax_get_cpu_num, power::system_off as ax_terminate};
 }
 
 mod time {
@@ -50,10 +49,6 @@ mod time {
     };
 }
 
-pub use self::mem::*;
-pub use self::stdio::*;
-pub use self::sys::*;
-pub use self::task::*;
-pub use self::time::*;
-
 pub use axio::PollState as AxPollState;
+
+pub use self::{mem::*, stdio::*, sys::*, task::*, time::*};

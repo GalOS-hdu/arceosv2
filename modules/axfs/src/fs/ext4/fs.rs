@@ -9,8 +9,8 @@ use kspin::{SpinNoPreempt as Mutex, SpinNoPreemptGuard as MutexGuard};
 
 use super::{
     Ext4CoreDisk, Inode,
-    wrapper::{FsConfig, EXT4_ROOT_INO},
     util::{LwExt4Filesystem, into_vfs_err},
+    wrapper::{EXT4_ROOT_INO, FsConfig},
 };
 
 const EXT4_CONFIG: FsConfig = FsConfig { bcache_size: 256 };
@@ -39,13 +39,11 @@ impl Ext4Filesystem {
     pub(crate) fn lock(&self) -> MutexGuard<'_, LwExt4Filesystem> {
         self.inner.lock()
     }
-
 }
 
 unsafe impl Send for Ext4Filesystem {}
 
 unsafe impl Sync for Ext4Filesystem {}
-
 
 impl FilesystemOps for Ext4Filesystem {
     fn name(&self) -> &str {
